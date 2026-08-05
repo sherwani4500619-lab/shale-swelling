@@ -1,12 +1,3 @@
-import os
-import sys
-
-# --- FORCE DEPENDENCY INSTALLATION ---
-try:
-    import scipy
-except ModuleNotFoundError:
-    os.system(f"{sys.executable} -m pip install scipy pandas numpy")
-
 import streamlit as st
 import pandas as pd
 import numpy as np
