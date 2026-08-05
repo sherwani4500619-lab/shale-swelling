@@ -81,14 +81,20 @@ else:
 
     # --- Prepare Data Frames ---
     
-    # 1. Dataframe specifically for the Chart (Time in Hours)
-    t_hours = t_sec / 3600.0
+    # 1. Dataframe for the Chart (Downsampled to max ~1000 points to prevent browser lag)
+    # This keeps the graph smooth and instantly responsive without altering the curve's shape.
+    step_size = max(1, len(t_sec) // 1000)
+    t_sec_chart = t_sec[::step_size]
+    swelling_chart = swelling[::step_size]
+    
+    t_hours_chart = t_sec_chart / 3600.0
+    
     chart_data = pd.DataFrame({
-        "Time (in hrs)": t_hours,
-        "Predicted Swelling": swelling
+        "Time (in hrs)": t_hours_chart,
+        "Predicted Swelling": swelling_chart
     }).set_index("Time (in hrs)")
 
-    # 2. Dataframe specifically for CSV Export (Time in Seconds)
+    # 2. Dataframe strictly for CSV Export (Contains ALL data points, exactly every 10 seconds)
     results_df = pd.DataFrame({
         "Time (in sec)": t_sec,
         "Predicted Swelling": swelling
@@ -102,13 +108,13 @@ else:
 
     with tab2:
         st.markdown("#### Download Results")
-        st.write("Click the button below to download the full time-series data (Time in seconds vs. Predicted Swelling).")
+        st.write(f"Click the button below to download the full, high-resolution dataset ({len(t_sec):,} rows).")
         
-        # Convert the export dataframe to CSV
+        # Convert the full export dataframe to CSV
         csv_data = results_df.to_csv(index=False).encode('utf-8')
         
         st.download_button(
-            label="📥 Download Results (CSV)",
+            label="📥 Download Full Results (CSV)",
             data=csv_data,
             file_name="shale_swelling_results.csv",
             mime="text/csv"
