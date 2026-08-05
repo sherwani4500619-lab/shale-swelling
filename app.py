@@ -54,7 +54,7 @@ st.set_page_config(
  
 # --- Header Section ---
 st.title("🪨 Advanced Shale Swelling Prediction & Multi-Model Comparison Dashboard")
-st.markdown("Compare experimental lab data against your Custom Asymptotic Model and other kinetic models with multi-select comparison, statistical performance charts, and Excel export.")
+st.markdown("Compare experimental lab data against your Custom Asymptotic Model and other kinetic models with multi-select comparison, sorted light-shaded performance charts with value labels, and Excel export.")
 st.divider()
  
 # --- Sidebar: Mode Selection ---
@@ -344,29 +344,53 @@ else:
             
             st.altair_chart(base_chart, use_container_width=True)
             
-            # --- R² AND RMSE BAR PLOTS BENEATH THE GRAPH ---
+            # --- SORTED LIGHT-SHADED R² AND RMSE BAR CHARTS WITH VALUE LABELS ---
             if not metrics_df.empty:
                 st.markdown("### 📊 Model Performance Comparison Bar Charts")
                 
                 col_bar1, col_bar2 = st.columns(2)
                 
                 with col_bar1:
-                    st.markdown("#### Root Mean Squared Error (RMSE % - Lower is Better)")
-                    rmse_chart = alt.Chart(metrics_df).mark_bar(color='#d62728').encode(
-                        x=alt.X('Model:N', sort='-y', title='Model'),
+                    st.markdown("#### Root Mean Squared Error (RMSE %)")
+                    
+                    # Base bar chart (lightly shaded with opacity=0.6, sorted descending)
+                    bars_rmse = alt.Chart(metrics_df).mark_bar(color='#d62728', opacity=0.6).encode(
+                        x=alt.X('Model:N', sort='-y', title='Model', axis=alt.Axis(labelAngle=-20)),
                         y=alt.Y('RMSE (%):Q', title='RMSE (%)'),
                         tooltip=['Model:N', 'RMSE (%):Q']
-                    ).properties(width=320, height=300).interactive()
-                    st.altair_chart(rmse_chart, use_container_width=True)
+                    )
+                    # Text labels on top of bars
+                    text_rmse = bars_rmse.mark_text(
+                        align='center',
+                        baseline='bottom',
+                        dy=-4,
+                        fontSize=11,
+                        color='black'
+                    ).encode(text=alt.Text('RMSE (%):Q', format='.3f'))
+                    
+                    rmse_final = (bars_rmse + text_rmse).properties(width=320, height=320).interactive()
+                    st.altair_chart(rmse_final, use_container_width=True)
                 
                 with col_bar2:
-                    st.markdown("#### Coefficient of Determination (R² Score - Higher is Better)")
-                    r2_chart = alt.Chart(metrics_df).mark_bar(color='#2ca02c').encode(
-                        x=alt.X('Model:N', sort='-y', title='Model'),
+                    st.markdown("#### Coefficient of Determination (R² Score)")
+                    
+                    # Base bar chart (lightly shaded with opacity=0.6, sorted descending)
+                    bars_r2 = alt.Chart(metrics_df).mark_bar(color='#2ca02c', opacity=0.6).encode(
+                        x=alt.X('Model:N', sort='-y', title='Model', axis=alt.Axis(labelAngle=-20)),
                         y=alt.Y('R² Score:Q', title='R² Score'),
                         tooltip=['Model:N', 'R² Score:Q']
-                    ).properties(width=320, height=300).interactive()
-                    st.altair_chart(r2_chart, use_container_width=True)
+                    )
+                    # Text labels on top of bars
+                    text_r2 = bars_r2.mark_text(
+                        align='center',
+                        baseline='bottom',
+                        dy=-4,
+                        fontSize=11,
+                        color='black'
+                    ).encode(text=alt.Text('R² Score:Q', format='.3f'))
+                    
+                    r2_final = (bars_r2 + text_r2).properties(width=320, height=320).interactive()
+                    st.altair_chart(r2_final, use_container_width=True)
             
         with tab2:
             st.markdown("#### Model Accuracy Metrics Comparison Table")
