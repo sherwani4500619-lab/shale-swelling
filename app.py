@@ -104,22 +104,19 @@ else:
 
     if uploaded_file is None:
         st.info("👋 Please upload your experimental CSV data in the sidebar to run the auto-solver.")
-        st.stop() # Halts the app cleanly until data is uploaded
+        st.stop()
 
     try:
-        # Read the uploaded data
         lab_data = pd.read_csv(uploaded_file)
-        t_exp = lab_data.iloc[:, 0].values # First column: Time
-        s_exp = lab_data.iloc[:, 1].values # Second column: Swelling
+        t_exp = lab_data.iloc[:, 0].values
+        s_exp = lab_data.iloc[:, 1].values
 
         st.markdown("### 📊 Auto-Solver Results")
         
-        # Create a dataframe for the graph. We start with the experimental data.
         df_chart = pd.DataFrame({"Time (sec)": t_exp, "Experimental Data": s_exp})
         
         # 1. Custom Model Fit
         if equation_choice in ["Custom Equation (Auto-Fit)", "Compare All Auto-Fit Models"]:
-            # Initial guesses for A and tau
             p0_custom = [max(s_exp), np.median(t_exp)] 
             popt_custom, _ = curve_fit(custom_model, t_exp, s_exp, p0=p0_custom, bounds=(0, np.inf))
             
@@ -142,7 +139,7 @@ else:
 
         # 3. Korsmeyer-Peppas Model Fit
         if equation_choice in ["Korsmeyer-Peppas Model (Auto-Fit)", "Compare All Auto-Fit Models"]:
-            p0_peppas = [0.1, 0.5] # Guesses for K_P and n
+            p0_peppas = [0.1, 0.5]
             popt_peppas, _ = curve_fit(peppas_model, t_exp, s_exp, p0=p0_peppas, bounds=(0, [np.inf, 2.0]))
             
             fit_KP, fit_n = popt_peppas
@@ -155,12 +152,10 @@ else:
 
         st.divider()
 
-        # Render Visuals
         tab1, tab2 = st.tabs(["📈 Data vs. Model Comparison", "💾 Export Fitted Data"])
         
         with tab1:
-            st.markdown("*(Note: For clarity, the chart below displays time in seconds matching your uploaded lab data)*")
-            # Set index to Time for Streamlit to chart correctly
+            st.markdown("*(Time in seconds matching uploaded lab data)*")
             st.line_chart(df_chart.set_index("Time (sec)"))
             
         with tab2:
@@ -174,4 +169,4 @@ else:
             )
 
     except Exception as e:
-        st.error(f"⚠️ An error occurred while fitting the data. Please ensure your CSV contains only numbers and no text headers in the data rows. Error details: {e}")
+        st.error(f"⚠️ Error fitting data: {e}")
