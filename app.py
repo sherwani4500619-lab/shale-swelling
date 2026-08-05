@@ -7,42 +7,63 @@ import altair as alt
 import io
 
 # --- Mathematical Model Functions for the Solver ---
-def custom_model(t, A, tau):
-    """Equation 2: Custom Asymptotic Swelling Model"""
-    x = t / tau
-    exp_val = 0.671205
-    return A * (np.abs(x)**exp_val) / (1 + (np.abs(x)**exp_val))
- 
-def higuchi_model(t, K_H):
-    """Higuchi Model: S(t) = K_H * sqrt(t)"""
-    return K_H * np.sqrt(np.maximum(t, 0))
- 
-def peppas_model(t, K_P, n):
-    """Korsmeyer-Peppas Model: S(t) = K_P * t^n"""
-    return K_P * (np.maximum(t, 0) ** n)
- 
+def single_exponential(t, A, k):
+    """Single Exponential (First-order kinetic): S(t) = A * (1 - exp(-k * t))"""
+    return A * (1.0 - np.exp(-k * np.maximum(t, 0)))
+
+def double_exponential(t, A1, k1, A2, k2):
+    """Double Exponential: S(t) = A1*(1 - exp(-k1*t)) + A2*(1 - exp(-k2*t))"""
+    t_safe = np.maximum(t, 0)
+    return A1 * (1.0 - np.exp(-k1 * t_safe)) + A2 * (1.0 - np.exp(-k2 * t_safe))
+
+def weibull_model(t, A, beta, alpha):
+    """Weibull Model: S(t) = A * (1 - exp(-(t / beta)^alpha))"""
+    t_safe = np.maximum(t, 0)
+    return A * (1.0 - np.exp(-((t_safe / np.maximum(beta, 1e-6)) ** np.maximum(alpha, 1e-4))))
+
+def logistic_model(t, A, k, t0):
+    """Logistic Model: S(t) = A / (1 + exp(-k * (t - t0)))"""
+    return A / (1.0 + np.exp(-k * (t - t0)))
+
+def gompertz_model(t, A, b, M):
+    """Gompertz Model: S(t) = A * exp(-exp(-b * (t - M)))"""
+    return A * np.exp(-np.exp(-b * (t - M)))
+
+def power_law(t, K, n):
+    """Power Law Model: S(t) = K * t^n"""
+    return K * (np.maximum(t, 0) ** n)
+
+def peleg_model(t, k1, k2):
+    """Peleg Model: S(t) = t / (k1 + k2 * t)"""
+    t_safe = np.maximum(t, 0)
+    return t_safe / (k1 + k2 * t_safe + 1e-6)
+
 # --- Page Configuration ---
 st.set_page_config(
-   page_title="Shale Swelling Model", 
+   page_title="Shale Swelling Advanced Model & Comparison", 
    page_icon="🪨",
    layout="wide", 
    initial_sidebar_state="expanded"
 )
  
 # --- Header Section ---
-st.title("🪨 Shale Swelling Prediction Model & Optimization Dashboard")
-st.markdown("Calculate theoretical shale swelling or upload lab data to automatically fit empirical models with explicit axis labeling and statistical evaluation.")
+st.title("🪨 Advanced Shale Swelling Prediction & Multi-Model Comparison Dashboard")
+st.markdown("Compare experimental lab data against all 7 standard kinetic and sorption models with robust curve fitting, statistical evaluation, and dark experimental data contrast.")
 st.divider()
  
 # --- Sidebar: Equation Selection ---
 st.sidebar.title("⚙️ Model Parameters")
 equation_choice = st.sidebar.selectbox(
-    "1. Select Swelling Equation", 
+    "1. Select Evaluation Mode", 
     [
         "Empirical CEC Model (Theoretical)", 
-        "Custom Equation (Auto-Fit)",
-        "Higuchi Model (Auto-Fit)",
-        "Korsmeyer-Peppas Model (Auto-Fit)",
+        "Single Exponential (First-order)",
+        "Double Exponential",
+        "Weibull Model",
+        "Logistic Model",
+        "Gompertz Model",
+        "Power Law",
+        "Peleg Model",
         "Compare All Auto-Fit Models"
     ]
 )
@@ -94,7 +115,7 @@ if equation_choice == "Empirical CEC Model (Theoretical)":
         
         tab1, tab2 = st.tabs(["📈 Interactive Swelling Chart", "💾 Export Data"])
         with tab1:
-            line_chart = alt.Chart(chart_df).mark_line(strokeWidth=2).encode(
+            line_chart = alt.Chart(chart_df).mark_line(strokeWidth=3, color='#1f77b4').encode(
                 x=alt.X('Time (seconds):Q', title='Time (seconds)'),
                 y=alt.Y('Theoretical Swelling:Q', title='Swelling (%)'),
                 tooltip=['Time (seconds):Q', 'Theoretical Swelling:Q']
@@ -128,8 +149,8 @@ else:
         lab_data = pd.read_excel(uploaded_file, sheet_name=sheet_name, skiprows=14)
         lab_data.columns = lab_data.columns.astype(str).str.strip()
         
-        raw_time = lab_data.iloc[:, 1]  # Elap Time column
-        s_exp = pd.to_numeric(lab_data.iloc[:, 2], errors='coerce').values  # Swell (%)
+        raw_time = lab_data.iloc[:, 1]  # Elapsed Time column
+        s_exp = pd.to_numeric(lab_data.iloc[:, 2], errors='coerce').values  # Swelling (%) column
         
         def time_to_sec(t_str):
             try:
@@ -150,75 +171,105 @@ else:
         t_exp = t_sec[valid_idx]
         s_exp = s_exp[valid_idx]
  
-        st.markdown(f"### 📊 Auto-Solver Results (Sheet: {sheet_name})")
+        st.markdown(f"### 📊 Auto-Solver & Comparison Results (Sheet: {sheet_name})")
         
-        # Performance downsampling for fast solving
+        # Performance downsampling for swift curve fitting
         step = max(1, len(t_exp) // 300)
         t_fit_x = t_exp[::step]
         s_fit_y = s_exp[::step]
 
-        df_chart = pd.DataFrame({"Time (seconds)": t_exp, "Experimental Data": s_exp})
+        df_chart = pd.DataFrame({"Time (seconds)": t_exp, "Actual Experimental Swelling": s_exp})
         metrics_list = []
         
-        # 1. Custom Model Fit
-        if equation_choice in ["Custom Equation (Auto-Fit)", "Compare All Auto-Fit Models"]:
+        # 1. Single Exponential
+        if equation_choice in ["Single Exponential (First-order)", "Compare All Auto-Fit Models"]:
             try:
-                p0_custom = [max(s_fit_y), np.median(t_fit_x)] 
-                popt_custom, _ = curve_fit(custom_model, t_fit_x, s_fit_y, p0=p0_custom, bounds=(0, np.inf), maxfev=5000)
-                fit_A, fit_tau = popt_custom
-                
-                y_pred_full = custom_model(t_exp, fit_A, fit_tau)
-                df_chart["Custom Model Fit"] = y_pred_full
-                
+                popt, _ = curve_fit(single_exponential, t_fit_x, s_fit_y, p0=[max(s_fit_y), 1e-4], bounds=(0, np.inf), maxfev=5000)
+                y_pred_full = single_exponential(t_exp, *popt)
+                df_chart["Single Exponential"] = y_pred_full
                 rmse = np.sqrt(mean_squared_error(s_exp, y_pred_full))
                 r2 = r2_score(s_exp, y_pred_full)
-                metrics_list.append({"Model": "Custom Model", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
-                
-                with st.success("Custom Model Parameters:"):
-                    c1, c2 = st.columns(2)
-                    c1.metric("Fitted Max Capacity (A)", f"{fit_A:.4f} %")
-                    c2.metric("Fitted Time Constant (τ)", f"{fit_tau:.2f} s")
+                metrics_list.append({"Model": "Single Exponential", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
             except Exception as e:
-                st.warning(f"Custom Model fit skipped: {e}")
- 
-        # 2. Higuchi Model Fit
-        if equation_choice in ["Higuchi Model (Auto-Fit)", "Compare All Auto-Fit Models"]:
+                st.warning(f"Single Exponential fit skipped: {e}")
+
+        # 2. Double Exponential
+        if equation_choice in ["Double Exponential", "Compare All Auto-Fit Models"]:
             try:
-                popt_higuchi, _ = curve_fit(higuchi_model, t_fit_x, s_fit_y, bounds=(0, np.inf), maxfev=5000)
-                fit_KH = popt_higuchi[0]
-                
-                y_pred_full = higuchi_model(t_exp, fit_KH)
-                df_chart["Higuchi Fit"] = y_pred_full
-                
+                p0_double = [max(s_fit_y)*0.6, 1e-3, max(s_fit_y)*0.4, 1e-5]
+                popt, _ = curve_fit(double_exponential, t_fit_x, s_fit_y, p0=p0_double, bounds=(0, np.inf), maxfev=10000)
+                y_pred_full = double_exponential(t_exp, *popt)
+                df_chart["Double Exponential"] = y_pred_full
                 rmse = np.sqrt(mean_squared_error(s_exp, y_pred_full))
                 r2 = r2_score(s_exp, y_pred_full)
-                metrics_list.append({"Model": "Higuchi Model", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
-                
-                with st.info("Higuchi Model Parameters:"):
-                    st.metric("Fitted Constant (K_H)", f"{fit_KH:.6f}")
+                metrics_list.append({"Model": "Double Exponential", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
             except Exception as e:
-                st.warning(f"Higuchi Model fit skipped: {e}")
- 
-        # 3. Korsmeyer-Peppas Model Fit
-        if equation_choice in ["Korsmeyer-Peppas Model (Auto-Fit)", "Compare All Auto-Fit Models"]:
+                st.warning(f"Double Exponential fit skipped: {e}")
+
+        # 3. Weibull Model
+        if equation_choice in ["Weibull Model", "Compare All Auto-Fit Models"]:
             try:
-                p0_peppas = [0.1, 0.5]
-                popt_peppas, _ = curve_fit(peppas_model, t_fit_x, s_fit_y, p0=p0_peppas, bounds=(0, [np.inf, 2.0]), maxfev=5000)
-                fit_KP, fit_n = popt_peppas
-                
-                y_pred_full = peppas_model(t_exp, fit_KP, fit_n)
-                df_chart["Peppas Fit"] = y_pred_full
-                
+                p0_weibull = [max(s_fit_y), np.median(t_fit_x), 1.0]
+                popt, _ = curve_fit(weibull_model, t_fit_x, s_fit_y, p0=p0_weibull, bounds=([0, 0, 0], [np.inf, np.inf, 5]), maxfev=8000)
+                y_pred_full = weibull_model(t_exp, *popt)
+                df_chart["Weibull Model"] = y_pred_full
                 rmse = np.sqrt(mean_squared_error(s_exp, y_pred_full))
                 r2 = r2_score(s_exp, y_pred_full)
-                metrics_list.append({"Model": "Korsmeyer-Peppas", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
-                
-                with st.warning("Korsmeyer-Peppas Parameters:"):
-                    c1, c2 = st.columns(2)
-                    c1.metric("Fitted Constant (K_P)", f"{fit_KP:.6f}")
-                    c2.metric("Release Exponent (n)", f"{fit_n:.4f}")
+                metrics_list.append({"Model": "Weibull Model", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
             except Exception as e:
-                st.warning(f"Korsmeyer-Peppas fit skipped: {e}")
+                st.warning(f"Weibull Model fit skipped: {e}")
+
+        # 4. Logistic Model
+        if equation_choice in ["Logistic Model", "Compare All Auto-Fit Models"]:
+            try:
+                p0_logistic = [max(s_fit_y), 1e-4, np.median(t_fit_x)]
+                popt, _ = curve_fit(logistic_model, t_fit_x, s_fit_y, p0=p0_logistic, bounds=([0, 0, -np.inf], [np.inf, np.inf, np.inf]), maxfev=8000)
+                y_pred_full = logistic_model(t_exp, *popt)
+                df_chart["Logistic Model"] = y_pred_full
+                rmse = np.sqrt(mean_squared_error(s_exp, y_pred_full))
+                r2 = r2_score(s_exp, y_pred_full)
+                metrics_list.append({"Model": "Logistic Model", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
+            except Exception as e:
+                st.warning(f"Logistic Model fit skipped: {e}")
+
+        # 5. Gompertz Model
+        if equation_choice in ["Gompertz Model", "Compare All Auto-Fit Models"]:
+            try:
+                p0_gomp = [max(s_fit_y), 1e-4, np.median(t_fit_x)]
+                popt, _ = curve_fit(gompertz_model, t_fit_x, s_fit_y, p0=p0_gomp, bounds=([0, 0, -np.inf], [np.inf, np.inf, np.inf]), maxfev=8000)
+                y_pred_full = gompertz_model(t_exp, *popt)
+                df_chart["Gompertz Model"] = y_pred_full
+                rmse = np.sqrt(mean_squared_error(s_exp, y_pred_full))
+                r2 = r2_score(s_exp, y_pred_full)
+                metrics_list.append({"Model": "Gompertz Model", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
+            except Exception as e:
+                st.warning(f"Gompertz Model fit skipped: {e}")
+
+        # 6. Power Law
+        if equation_choice in ["Power Law", "Compare All Auto-Fit Models"]:
+            try:
+                p0_power = [0.1, 0.5]
+                popt, _ = curve_fit(power_law, t_fit_x, s_fit_y, p0=p0_power, bounds=(0, [np.inf, 2.0]), maxfev=5000)
+                y_pred_full = power_law(t_exp, *popt)
+                df_chart["Power Law"] = y_pred_full
+                rmse = np.sqrt(mean_squared_error(s_exp, y_pred_full))
+                r2 = r2_score(s_exp, y_pred_full)
+                metrics_list.append({"Model": "Power Law", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
+            except Exception as e:
+                st.warning(f"Power Law fit skipped: {e}")
+
+        # 7. Peleg Model
+        if equation_choice in ["Peleg Model", "Compare All Auto-Fit Models"]:
+            try:
+                p0_peleg = [10.0, 0.1]
+                popt, _ = curve_fit(peleg_model, t_fit_x, s_fit_y, p0=p0_peleg, bounds=(0, np.inf), maxfev=5000)
+                y_pred_full = peleg_model(t_exp, *popt)
+                df_chart["Peleg Model"] = y_pred_full
+                rmse = np.sqrt(mean_squared_error(s_exp, y_pred_full))
+                r2 = r2_score(s_exp, y_pred_full)
+                metrics_list.append({"Model": "Peleg Model", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
+            except Exception as e:
+                st.warning(f"Peleg Model fit skipped: {e}")
  
         metrics_df = pd.DataFrame(metrics_list)
         st.divider()
@@ -226,7 +277,7 @@ else:
         tab1, tab2, tab3 = st.tabs(["📈 Data vs. Model Comparison", "📊 Statistical Performance", "💾 Export Data"])
         
         with tab1:
-            st.markdown("*(Explicit Axis Labeling: Time in seconds vs Swelling percentage)*")
+            st.markdown("*(Actual experimental swelling is highlighted with a bold dark line/marker for clear comparison against fitted models)*")
             
             melted_df = df_chart.melt(
                 id_vars=["Time (seconds)"], 
@@ -234,24 +285,40 @@ else:
                 value_name="Swelling (%)"
             )
             
-            line_chart = alt.Chart(melted_df).mark_line(strokeWidth=2).encode(
+            # Custom color scale to keep Actual Experimental Data dark/black
+            domain_list = melted_df["Legend / Model"].unique().tolist()
+            range_list = []
+            for name in domain_list:
+                if "Actual" in name:
+                    range_list.append("#000000")  # Solid Black for Actual Data
+                else:
+                    range_list.append(
+                        "#1f77b4" if len(range_list) == 0 else 
+                        "#ff7f0e" if len(range_list) == 1 else 
+                        "#2ca02c" if len(range_list) == 2 else 
+                        "#d62728" if len(range_list) == 3 else 
+                        "#9467bd" if len(range_list) == 4 else 
+                        "#8c564b" if len(range_list) == 5 else "#e377c2"
+                    )
+
+            base_chart = alt.Chart(melted_df).mark_line(strokeWidth=2.5).encode(
                 x=alt.X('Time (seconds):Q', title='Time (seconds)'),
                 y=alt.Y('Swelling (%):Q', title='Swelling (%)'),
-                color=alt.Color('Legend / Model:N', title='Models & Data'),
+                color=alt.Color('Legend / Model:N', scale=alt.Scale(domain=domain_list, range=range_list), title='Models & Data'),
                 tooltip=['Time (seconds):Q', 'Swelling (%):Q', 'Legend / Model:N']
-            ).properties(width=700, height=450).interactive()
+            ).properties(width=700, height=480).interactive()
             
-            st.altair_chart(line_chart, use_container_width=True)
+            st.altair_chart(base_chart, use_container_width=True)
             
         with tab2:
-            st.markdown("#### Model Accuracy Metrics")
+            st.markdown("#### Model Accuracy Metrics Comparison")
             if not metrics_df.empty:
                 st.dataframe(metrics_df, use_container_width=True)
             else:
                 st.info("No models successfully evaluated.")
             
         with tab3:
-            st.markdown("#### Download Fitted Data & Metrics")
+            st.markdown("#### Download Fitted Data & Performance Metrics")
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -263,7 +330,7 @@ else:
             st.download_button(
                 label="📥 Download Complete Results as Excel (.xlsx)",
                 data=excel_data,
-                file_name="auto_fitted_models_results.xlsx",
+                file_name="shale_swelling_all_models_results.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
  
