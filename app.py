@@ -327,66 +327,67 @@ else:
         metrics_df = pd.DataFrame(metrics_list)
         st.markdown("")
  
-        tab1, tab2, tab3 = st.tabs(["📉 3-Chart Straight Line Layout", "📋 Statistical Metrics Table", "💾 Export Results"])
+        tab1, tab2, tab3 = st.tabs(["📈 Vertical Stack Layout", "📋 Statistical Metrics Table", "💾 Export Results"])
         
         with tab1:
-            # 3-Column Straight Line Layout (All 3 graphs side by side)
-            col1, col2, col3 = st.columns(3)
+            # --- TOP-TO-BOTTOM VERTICAL STACK (All 3 graphs stacked sequentially) ---
             
-            with col1:
-                with st.container(border=True):
-                    st.markdown("#### 📈 Swelling Overlay")
-                    melted_df = df_chart.melt(id_vars=["Time (seconds)"], var_name="Legend / Model", value_name="Swelling (%)")
-                    domain_list = melted_df["Legend / Model"].unique().tolist()
-                    range_list = ["#ffffff" if "Actual" in name else f"C{i}" for i, name in enumerate(domain_list)]
+            # 1. Swelling Overlay Chart
+            with st.container(border=True):
+                st.markdown("#### 📈 Swelling vs. Time Overlay")
+                st.caption("Actual experimental data shown with a solid black line/marker.")
+                
+                melted_df = df_chart.melt(id_vars=["Time (seconds)"], var_name="Legend / Model", value_name="Swelling (%)")
+                domain_list = melted_df["Legend / Model"].unique().tolist()
+                range_list = ["#ffffff" if "Actual" in name else f"C{i}" for i, name in enumerate(domain_list)]
 
-                    base_chart = alt.Chart(melted_df).mark_line(strokeWidth=2).encode(
-                        x=alt.X('Time (seconds):Q', title='Time (s)'),
-                        y=alt.Y('Swelling (%):Q', title='Swelling (%)'),
-                        color=alt.Color('Legend / Model:N', scale=alt.Scale(domain=domain_list, range=range_list), title='Models'),
-                        tooltip=['Time (seconds):Q', 'Swelling (%):Q', 'Legend / Model:N']
-                    ).properties(width=340, height=380).interactive()
-                    st.altair_chart(base_chart, use_container_width=True)
+                base_chart = alt.Chart(melted_df).mark_line(strokeWidth=2.5).encode(
+                    x=alt.X('Time (seconds):Q', title='Time (seconds)'),
+                    y=alt.Y('Swelling (%):Q', title='Swelling (%)'),
+                    color=alt.Color('Legend / Model:N', scale=alt.Scale(domain=domain_list, range=range_list), title='Model Legend'),
+                    tooltip=['Time (seconds):Q', 'Swelling (%):Q', 'Legend / Model:N']
+                ).properties(width=750, height=400).interactive()
+                
+                st.altair_chart(base_chart, use_container_width=True)
             
-            with col2:
-                if not metrics_df.empty:
-                    with st.container(border=True):
-                        st.markdown("#### 📉 RMSE (%)")
-                        fig, ax = plt.subplots(figsize=(4.2, 3.8))
-                        sorted_rmse = metrics_df.sort_values(by="RMSE (%)", ascending=False)
-                        bars = ax.bar(sorted_rmse["Model"], sorted_rmse["RMSE (%)"], color='#f85149', alpha=0.7, edgecolor='white', linewidth=0.5)
-                        ax.set_ylabel("RMSE (%)", fontsize=9, color='white')
-                        ax.tick_params(colors='white', labelsize=8)
-                        plt.xticks(rotation=30, ha='right')
-                        for bar in bars:
-                            h = bar.get_height()
-                            ax.annotate(f'{h:.3f}', xy=(bar.get_x() + bar.get_width() / 2, h), xytext=(0, 2), textcoords="offset points", ha='center', va='bottom', fontsize=8, fontweight='bold', color='white')
-                        ax.set_facecolor('#0e1117')
-                        fig.patch.set_facecolor('#0e1117')
-                        sns.despine(top=True, right=True, left=True, bottom=True)
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                        plt.close(fig)
-            
-            with col3:
-                if not metrics_df.empty:
-                    with st.container(border=True):
-                        st.markdown("#### 📊 R² Score")
-                        fig, ax = plt.subplots(figsize=(4.2, 3.8))
-                        sorted_r2 = metrics_df.sort_values(by="R² Score", ascending=False)
-                        bars = ax.bar(sorted_r2["Model"], sorted_r2["R² Score"], color='#2ea043', alpha=0.7, edgecolor='white', linewidth=0.5)
-                        ax.set_ylabel("R² Score", fontsize=9, color='white')
-                        ax.tick_params(colors='white', labelsize=8)
-                        plt.xticks(rotation=30, ha='right')
-                        for bar in bars:
-                            h = bar.get_height()
-                            ax.annotate(f'{h:.3f}', xy=(bar.get_x() + bar.get_width() / 2, h), xytext=(0, 2), textcoords="offset points", ha='center', va='bottom', fontsize=8, fontweight='bold', color='white')
-                        ax.set_facecolor('#0e1117')
-                        fig.patch.set_facecolor('#0e1117')
-                        sns.despine(top=True, right=True, left=True, bottom=True)
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                        plt.close(fig)
+            # 2. RMSE Bar Chart
+            if not metrics_df.empty:
+                with st.container(border=True):
+                    st.markdown("#### 📉 Root Mean Squared Error (RMSE %)")
+                    fig, ax = plt.subplots(figsize=(8, 3.8))
+                    sorted_rmse = metrics_df.sort_values(by="RMSE (%)", ascending=False)
+                    bars = ax.bar(sorted_rmse["Model"], sorted_rmse["RMSE (%)"], color='#f85149', alpha=0.7, edgecolor='white', linewidth=0.6)
+                    ax.set_ylabel("RMSE (%)", fontsize=10, color='white')
+                    ax.tick_params(colors='white', labelsize=9)
+                    plt.xticks(rotation=20, ha='right')
+                    for bar in bars:
+                        h = bar.get_height()
+                        ax.annotate(f'{h:.4f}', xy=(bar.get_x() + bar.get_width() / 2, h), xytext=(0, 3), textcoords="offset points", ha='center', va='bottom', fontsize=9, fontweight='bold', color='white')
+                    ax.set_facecolor('#0e1117')
+                    fig.patch.set_facecolor('#0e1117')
+                    sns.despine(top=True, right=True, left=True, bottom=True)
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    plt.close(fig)
+                
+                # 3. R² Score Bar Chart
+                with st.container(border=True):
+                    st.markdown("#### 📊 Coefficient of Determination (R² Score)")
+                    fig, ax = plt.subplots(figsize=(8, 3.8))
+                    sorted_r2 = metrics_df.sort_values(by="R² Score", ascending=False)
+                    bars = ax.bar(sorted_r2["Model"], sorted_r2["R² Score"], color='#2ea043', alpha=0.7, edgecolor='white', linewidth=0.6)
+                    ax.set_ylabel("R² Score", fontsize=10, color='white')
+                    ax.tick_params(colors='white', labelsize=9)
+                    plt.xticks(rotation=20, ha='right')
+                    for bar in bars:
+                        h = bar.get_height()
+                        ax.annotate(f'{h:.4f}', xy=(bar.get_x() + bar.get_width() / 2, h), xytext=(0, 3), textcoords="offset points", ha='center', va='bottom', fontsize=9, fontweight='bold', color='white')
+                    ax.set_facecolor('#0e1117')
+                    fig.patch.set_facecolor('#0e1117')
+                    sns.despine(top=True, right=True, left=True, bottom=True)
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    plt.close(fig)
             
         with tab2:
             with st.container(border=True):
