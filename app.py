@@ -92,30 +92,15 @@ else:
     # --- Excel File Export ---
     st.subheader("Data Export")
 
-    def create_excel_report():
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # Summary Sheet
-            inputs_summary = pd.DataFrame({
-                "Parameter": [
-                    "CEC (meq/100g)", "Smectite (wt.%)", "Quartz (wt.%)", 
-                    "Dolomite (wt.%)", "Calcite (wt.%)", "Halite (wt.%)",
-                    "Calculated R", "Predicted Max Capacity A (%)", "Characteristic Time Tau (s)"
-                ],
-                "Value": [cec, sm, q, dol, cal, hal, R, A, tau]
-            })
-            inputs_summary.to_excel(writer, sheet_name="Model Parameters", index=False)
-            
-            # Time-Series Sheet
-            results_df.to_excel(writer, sheet_name="Swelling Profile Data", index=False)
-            
-        return output.getvalue()
+   # --- CSV File Export ---
+    st.subheader("Data Export")
 
-    excel_bytes = create_excel_report()
+    # Convert the time-series dataframe to CSV
+    csv_data = results_df.to_csv(index=False).encode('utf-8')
 
     st.download_button(
-        label="📥 Download Excel File (Inputs & Results)",
-        data=excel_bytes,
-        file_name="shale_swelling_model_results.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        label="📥 Download Results (CSV)",
+        data=csv_data,
+        file_name="shale_swelling_results.csv",
+        mime="text/csv"
     )
