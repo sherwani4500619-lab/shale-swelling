@@ -1,8 +1,41 @@
+import os
+import sys
+
+# --- FORCE DEPENDENCY INSTALLATION ---
+try:
+    import scipy
+except ModuleNotFoundError:
+    os.system(f"{sys.executable} -m pip install scipy pandas numpy")
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 from scipy.optimize import curve_fit
 
+# --- Mathematical Model Functions for the Solver ---
+def custom_model(t, A, tau):
+    """Equation 2: Custom Asymptotic Swelling Model"""
+    x = t / tau
+    exp_val = 0.671205
+    return A * (np.abs(x)**exp_val) / (1 + (np.abs(x)**exp_val))
+
+def higuchi_model(t, K_H):
+    """Higuchi Model: S(t) = K_H * sqrt(t)"""
+    return K_H * np.sqrt(t)
+
+def peppas_model(t, K_P, n):
+    """Korsmeyer-Peppas Model: S(t) = K_P * t^n"""
+    return K_P * (t ** n)
+
+# --- Page Configuration ---
+st.set_page_config(
+    page_title="Shale Swelling Model", 
+    page_icon="🪨", 
+    layout="wide", 
+    initial_sidebar_state="expanded"
+)
+
+# ... (Paste the rest of the dashboard code below this) ...
 # --- Mathematical Model Functions for the Solver ---
 def custom_model(t, A, tau):
     """Equation 2: Custom Asymptotic Swelling Model"""
