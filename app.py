@@ -7,6 +7,12 @@ import altair as alt
 import io
 
 # --- Mathematical Model Functions for the Solver ---
+def custom_model(t, A, tau):
+    """Custom Asymptotic Swelling Model with fixed exponent 0.671205"""
+    x = t / tau
+    exp_val = 0.671205
+    return A * (np.abs(x)**exp_val) / (1 + (np.abs(x)**exp_val))
+
 def single_exponential(t, A, k):
     """Single Exponential (First-order kinetic): S(t) = A * (1 - exp(-k * t))"""
     return A * (1.0 - np.exp(-k * np.maximum(t, 0)))
@@ -48,7 +54,7 @@ st.set_page_config(
  
 # --- Header Section ---
 st.title("🪨 Advanced Shale Swelling Prediction & Multi-Model Comparison Dashboard")
-st.markdown("Compare experimental lab data against all 7 standard kinetic and sorption models with robust curve fitting, statistical evaluation, and dark experimental data contrast.")
+st.markdown("Compare experimental lab data against your Custom Asymptotic Model and all standard kinetic models with robust curve fitting, statistical evaluation, and dark experimental data contrast.")
 st.divider()
  
 # --- Sidebar: Equation Selection ---
@@ -57,6 +63,7 @@ equation_choice = st.sidebar.selectbox(
     "1. Select Evaluation Mode", 
     [
         "Empirical CEC Model (Theoretical)", 
+        "Custom Equation (Auto-Fit)",
         "Single Exponential (First-order)",
         "Double Exponential",
         "Weibull Model",
@@ -181,7 +188,20 @@ else:
         df_chart = pd.DataFrame({"Time (seconds)": t_exp, "Actual Experimental Swelling": s_exp})
         metrics_list = []
         
-        # 1. Single Exponential
+        # 1. Custom Asymptotic Model
+        if equation_choice in ["Custom Equation (Auto-Fit)", "Compare All Auto-Fit Models"]:
+            try:
+                p0_custom = [max(s_fit_y), np.median(t_fit_x)] 
+                popt, _ = curve_fit(custom_model, t_fit_x, s_fit_y, p0=p0_custom, bounds=(0, np.inf), maxfev=5000)
+                y_pred_full = custom_model(t_exp, *popt)
+                df_chart["Custom Asymptotic Model"] = y_pred_full
+                rmse = np.sqrt(mean_squared_error(s_exp, y_pred_full))
+                r2 = r2_score(s_exp, y_pred_full)
+                metrics_list.append({"Model": "Custom Asymptotic Model", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
+            except Exception as e:
+                st.warning(f"Custom Model fit skipped: {e}")
+
+        # 2. Single Exponential
         if equation_choice in ["Single Exponential (First-order)", "Compare All Auto-Fit Models"]:
             try:
                 popt, _ = curve_fit(single_exponential, t_fit_x, s_fit_y, p0=[max(s_fit_y), 1e-4], bounds=(0, np.inf), maxfev=5000)
@@ -193,7 +213,7 @@ else:
             except Exception as e:
                 st.warning(f"Single Exponential fit skipped: {e}")
 
-        # 2. Double Exponential
+        # 3. Double Exponential
         if equation_choice in ["Double Exponential", "Compare All Auto-Fit Models"]:
             try:
                 p0_double = [max(s_fit_y)*0.6, 1e-3, max(s_fit_y)*0.4, 1e-5]
@@ -206,7 +226,7 @@ else:
             except Exception as e:
                 st.warning(f"Double Exponential fit skipped: {e}")
 
-        # 3. Weibull Model
+        # 4. Weibull Model
         if equation_choice in ["Weibull Model", "Compare All Auto-Fit Models"]:
             try:
                 p0_weibull = [max(s_fit_y), np.median(t_fit_x), 1.0]
@@ -219,7 +239,7 @@ else:
             except Exception as e:
                 st.warning(f"Weibull Model fit skipped: {e}")
 
-        # 4. Logistic Model
+        # 5. Logistic Model
         if equation_choice in ["Logistic Model", "Compare All Auto-Fit Models"]:
             try:
                 p0_logistic = [max(s_fit_y), 1e-4, np.median(t_fit_x)]
@@ -232,7 +252,7 @@ else:
             except Exception as e:
                 st.warning(f"Logistic Model fit skipped: {e}")
 
-        # 5. Gompertz Model
+        # 6. Gompertz Model
         if equation_choice in ["Gompertz Model", "Compare All Auto-Fit Models"]:
             try:
                 p0_gomp = [max(s_fit_y), 1e-4, np.median(t_fit_x)]
@@ -245,7 +265,7 @@ else:
             except Exception as e:
                 st.warning(f"Gompertz Model fit skipped: {e}")
 
-        # 6. Power Law
+        # 7. Power Law
         if equation_choice in ["Power Law", "Compare All Auto-Fit Models"]:
             try:
                 p0_power = [0.1, 0.5]
@@ -258,7 +278,7 @@ else:
             except Exception as e:
                 st.warning(f"Power Law fit skipped: {e}")
 
-        # 7. Peleg Model
+        # 8. Peleg Model
         if equation_choice in ["Peleg Model", "Compare All Auto-Fit Models"]:
             try:
                 p0_peleg = [10.0, 0.1]
@@ -285,7 +305,6 @@ else:
                 value_name="Swelling (%)"
             )
             
-            # Custom color scale to keep Actual Experimental Data dark/black
             domain_list = melted_df["Legend / Model"].unique().tolist()
             range_list = []
             for name in domain_list:
