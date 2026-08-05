@@ -4,13 +4,15 @@ import numpy as np
 from scipy.optimize import curve_fit
 from sklearn.metrics import mean_squared_error, r2_score
 import altair as alt
+import matplotlib.pyplot as plt
+import seaborn as sns
 import io
 
 # --- Mathematical Model Functions for the Solver ---
 def custom_model(t, A, tau):
     """Equation 2: Custom Asymptotic Swelling Model"""
     x = t / np.maximum(tau, 1e-6)
-    exp_val = 0.3
+    exp_val = 0.671205
     return A * (np.abs(x)**exp_val) / (1.0 + (np.abs(x)**exp_val))
 
 def single_exponential(t, A, k):
@@ -54,7 +56,7 @@ st.set_page_config(
  
 # --- Header Section ---
 st.title("🪨 Advanced Shale Swelling Prediction & Multi-Model Comparison Dashboard")
-st.markdown("Compare experimental lab data against your Custom Asymptotic Model and other kinetic models with multi-select comparison, sorted light-shaded performance charts with value labels, and Excel export.")
+st.markdown("Compare experimental lab data against your Custom Asymptotic Model and other kinetic models with multi-select comparison, publication-quality performance bar charts, and Excel export.")
 st.divider()
  
 # --- Sidebar: Mode Selection ---
@@ -156,7 +158,7 @@ else:
     selected_models = st.sidebar.multiselect(
         "Choose models for evaluation:",
         options=available_models,
-        default=["Custom Asymptotic Model", "Single Exponential (First-order)"]
+        default=["Custom Asymptotic Model", "Single Exponential (First-order)", "Weibull Model"]
     )
  
     try:
@@ -344,53 +346,59 @@ else:
             
             st.altair_chart(base_chart, use_container_width=True)
             
-            # --- SORTED LIGHT-SHADED R² AND RMSE BAR CHARTS WITH VALUE LABELS ---
+            # --- PUBLICATION-QUALITY MATPLOTLIB BAR CHARTS BENEATH ---
             if not metrics_df.empty:
                 st.markdown("### 📊 Model Performance Comparison Bar Charts")
                 
-                col_bar1, col_bar2 = st.columns(2)
+                col_m1, col_m2 = st.columns(2)
                 
-                with col_bar1:
-                    st.markdown("#### Root Mean Squared Error (RMSE %)")
+                with col_m1:
+                    fig, ax = plt.subplots(figsize=(6, 4.5))
+                    sorted_rmse = metrics_df.sort_values(by="RMSE (%)", ascending=True) # Lowest RMSE is best, but let's sort descending or ascending as requested
+                    # User requested: "arrange automatically from highest to lowest"
+                    sorted_rmse_desc = metrics_df.sort_values(by="RMSE (%)", ascending=False)
                     
-                    # Base bar chart (lightly shaded with opacity=0.6, sorted descending)
-                    bars_rmse = alt.Chart(metrics_df).mark_bar(color='#d62728', opacity=0.6).encode(
-                        x=alt.X('Model:N', sort='-y', title='Model', axis=alt.Axis(labelAngle=-20)),
-                        y=alt.Y('RMSE (%):Q', title='RMSE (%)'),
-                        tooltip=['Model:N', 'RMSE (%):Q']
-                    )
-                    # Text labels on top of bars
-                    text_rmse = bars_rmse.mark_text(
-                        align='center',
-                        baseline='bottom',
-                        dy=-4,
-                        fontSize=11,
-                        color='black'
-                    ).encode(text=alt.Text('RMSE (%):Q', format='.3f'))
+                    bars = ax.bar(sorted_rmse_desc["Model"], sorted_rmse_desc["RMSE (%)"], color='#d62728', alpha=0.65, edgecolor='black', linewidth=0.8)
+                    ax.set_title("Root Mean Squared Error (RMSE % - Lower is Better)", fontsize=11, fontweight='bold', pad=10)
+                    ax.set_ylabel("RMSE (%)", fontsize=10)
+                    plt.xticks(rotation=30, ha='right', fontsize=9)
                     
-                    rmse_final = (bars_rmse + text_rmse).properties(width=320, height=320).interactive()
-                    st.altair_chart(rmse_final, use_container_width=True)
+                    # Add value labels on top of bars
+                    for bar in bars:
+                        height = bar.get_height()
+                        ax.annotate(f'{height:.4f}',
+                                    xy=(bar.get_x() + bar.get_width() / 2, height),
+                                    xytext=(0, 4),  # 4 points vertical offset
+                                    textcoords="offset points",
+                                    ha='center', va='bottom', fontsize=9, fontweight='bold')
+                    
+                    sns.despine()
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    plt.close(fig)
                 
-                with col_bar2:
-                    st.markdown("#### Coefficient of Determination (R² Score)")
+                with col_m2:
+                    fig, ax = plt.subplots(figsize=(6, 4.5))
+                    sorted_r2_desc = metrics_df.sort_values(by="R² Score", ascending=False) # Highest R2 first
                     
-                    # Base bar chart (lightly shaded with opacity=0.6, sorted descending)
-                    bars_r2 = alt.Chart(metrics_df).mark_bar(color='#2ca02c', opacity=0.6).encode(
-                        x=alt.X('Model:N', sort='-y', title='Model', axis=alt.Axis(labelAngle=-20)),
-                        y=alt.Y('R² Score:Q', title='R² Score'),
-                        tooltip=['Model:N', 'R² Score:Q']
-                    )
-                    # Text labels on top of bars
-                    text_r2 = bars_r2.mark_text(
-                        align='center',
-                        baseline='bottom',
-                        dy=-4,
-                        fontSize=11,
-                        color='black'
-                    ).encode(text=alt.Text('R² Score:Q', format='.3f'))
+                    bars = ax.bar(sorted_r2_desc["Model"], sorted_r2_desc["R² Score"], color='#2ca02c', alpha=0.65, edgecolor='black', linewidth=0.8)
+                    ax.set_title("Coefficient of Determination (R² Score - Higher is Better)", fontsize=11, fontweight='bold', pad=10)
+                    ax.set_ylabel("R² Score", fontsize=10)
+                    plt.xticks(rotation=30, ha='right', fontsize=9)
                     
-                    r2_final = (bars_r2 + text_r2).properties(width=320, height=320).interactive()
-                    st.altair_chart(r2_final, use_container_width=True)
+                    # Add value labels on top of bars
+                    for bar in bars:
+                        height = bar.get_height()
+                        ax.annotate(f'{height:.4f}',
+                                    xy=(bar.get_x() + bar.get_width() / 2, height),
+                                    xytext=(0, 4),
+                                    textcoords="offset points",
+                                    ha='center', va='bottom', fontsize=9, fontweight='bold')
+                    
+                    sns.despine()
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    plt.close(fig)
             
         with tab2:
             st.markdown("#### Model Accuracy Metrics Comparison Table")
