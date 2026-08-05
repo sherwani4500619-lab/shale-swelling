@@ -122,7 +122,7 @@ if equation_choice == "Empirical CEC Model (Theoretical)":
 # AUTO-FIT MODELS (DATA UPLOAD REQUIRED)
 # ==========================================
 else:
-   st.sidebar.markdown("### 2. Upload Lab Data")
+    st.sidebar.markdown("### 2. Upload Lab Data")
     st.sidebar.caption("Upload a CSV or Excel file. Column 1 must be Time (seconds), Column 2 must be Swelling (%).")
     uploaded_file = st.sidebar.file_uploader("Upload Experimental Data", type=["csv", "xlsx"])
 
