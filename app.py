@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 st.title("🧪 Shale Swelling Prediction, Optimization & Mineralogy Dashboard")
-st.markdown("Upload lab swell meter data (`.csv` or `.xlsx`), run multi-model curve fitting, input XRD/CEC data, and export your results.")
+st.markdown("Upload lab swell meter data (`.csv` or `.xlsx`), select models to run, input XRD/CEC data, and export your results.")
 
 # --- SIDEBAR: FILE UPLOAD & CONFIGURATION ---
 st.sidebar.markdown("### 1. Upload Lab Data")
@@ -69,14 +69,23 @@ except Exception as e:
     st.error(f"Error reading data file: {e}")
     st.stop()
 
+# --- SIDEBAR: MODEL SELECTION ---
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 2. Model Selection")
+all_models = ['Empirical', 'Custom Asymptotic', 'Higuchi', 'Korsmeyer-Peppas']
+selected_models = st.sidebar.multiselect(
+    "Choose models to evaluate:",
+    options=all_models,
+    default=all_models
+)
+
 # --- SIDEBAR: XRD & CEC PARAMETERS ---
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 2. Mineralogy (XRD & CEC)")
+st.sidebar.markdown("### 3. Mineralogy (XRD & CEC)")
 st.sidebar.caption("Input sample mineral properties for empirical swelling correlation.")
 smectite_pct = st.sidebar.number_input("Smectite / Swelling Clay (%)", min_value=0.0, max_value=100.0, value=35.0, step=1.0)
 cec_val = st.sidebar.number_input("Cation Exchange Capacity (meq/100g)", min_value=0.0, max_value=150.0, value=25.0, step=0.5)
 
-# Empirical XRD/CEC Swelling Potential Estimation
 estimated_max_swell = (0.18 * smectite_pct) + (0.12 * cec_val)
 
 # --- MATHEMATICAL MODEL DEFINITIONS ---
@@ -96,60 +105,63 @@ def model_korsmeyer(t, k, n):
 st.markdown("### ⚙️ Model Optimization & Statistical Evaluation")
 
 if st.button("🚀 Run Instant Solver & Full Analysis", type="primary"):
-    with st.spinner("Optimizing models and calculating performance metrics..."):
-        
-        step = max(1, len(t_exp) // 300)
-        t_fit_x = t_exp[::step]
-        s_fit_y = s_exp[::step]
+    if not selected_models:
+        st.warning("⚠️ Please select at least one model from the sidebar dropdown.")
+    else:
+        with st.spinner("Optimizing selected models and calculating performance metrics..."):
+            
+            step = max(1, len(t_exp) // 300)
+            t_fit_x = t_exp[::step]
+            s_fit_y = s_exp[::step]
 
-        results = {}
-        metrics_list = []
+            results = {}
+            metrics_list = []
 
-        models_dict = {
-            'Empirical': (model_empirical, [max(s_fit_y), 1e-5]),
-            'Custom Asymptotic': (model_custom, [max(s_fit_y), 1e-5, 1.0]),
-            'Higuchi': (model_higuchi, [1.0]),
-            'Korsmeyer-Peppas': (model_korsmeyer, [1.0, 0.5])
-        }
+            models_dict = {
+                'Empirical': (model_empirical, [max(s_fit_y), 1e-5]),
+                'Custom Asymptotic': (model_custom, [max(s_fit_y), 1e-5, 1.0]),
+                'Higuchi': (model_higuchi, [1.0]),
+                'Korsmeyer-Peppas': (model_korsmeyer, [1.0, 0.5])
+            }
 
-        for name, (func, p0) in models_dict.items():
-            try:
-                if name == 'Empirical':
-                    popt, _ = curve_fit(func, t_fit_x, s_fit_y, p0=p0, maxfev=5000)
-                elif name == 'Custom Asymptotic':
-                    popt, _ = curve_fit(func, t_fit_x, s_fit_y, p0=p0, bounds=([0, 0, 0], [np.inf, np.inf, 5]), maxfev=5000)
-                elif name == 'Higuchi':
-                    popt, _ = curve_fit(func, t_fit_x, s_fit_y, p0=p0, maxfev=5000)
-                elif name == 'Korsmeyer-Peppas':
-                    popt, _ = curve_fit(func, t_fit_x, s_fit_y, p0=p0, bounds=([0, 0], [np.inf, 2]), maxfev=5000)
+            for name in selected_models:
+                func, p0 = models_dict[name]
+                try:
+                    if name == 'Empirical':
+                        popt, _ = curve_fit(func, t_fit_x, s_fit_y, p0=p0, maxfev=5000)
+                    elif name == 'Custom Asymptotic':
+                        popt, _ = curve_fit(func, t_fit_x, s_fit_y, p0=p0, bounds=([0, 0, 0], [np.inf, np.inf, 5]), maxfev=5000)
+                    elif name == 'Higuchi':
+                        popt, _ = curve_fit(func, t_fit_x, s_fit_y, p0=p0, maxfev=5000)
+                    elif name == 'Korsmeyer-Peppas':
+                        popt, _ = curve_fit(func, t_fit_x, s_fit_y, p0=p0, bounds=([0, 0], [np.inf, 2]), maxfev=5000)
 
-                y_pred_full = func(t_exp, *popt)
-                results[name] = y_pred_full
+                    y_pred_full = func(t_exp, *popt)
+                    results[name] = y_pred_full
 
-                rmse = np.sqrt(mean_squared_error(s_exp, y_pred_full))
-                r2 = r2_score(s_exp, y_pred_full)
+                    rmse = np.sqrt(mean_squared_error(s_exp, y_pred_full))
+                    r2 = r2_score(s_exp, y_pred_full)
 
-                metrics_list.append({
-                    "Model": name,
-                    "RMSE (%)": round(rmse, 4),
-                    "R² Score": round(r2, 4)
-                })
+                    metrics_list.append({
+                        "Model": name,
+                        "RMSE (%)": round(rmse, 4),
+                        "R² Score": round(r2, 4)
+                    })
 
-            except Exception as e:
-                st.warning(f"Model {name} optimization skipped: {e}")
+                except Exception as e:
+                    st.warning(f"Model {name} optimization skipped: {e}")
 
-        st.session_state['optimization_results'] = results
-        st.session_state['metrics_df'] = pd.DataFrame(metrics_list)
-        st.session_state['t_exp'] = t_exp
-        st.session_state['s_exp'] = s_exp
-        st.session_state['xrd_cec_swell'] = estimated_max_swell
-        
-        st.success("✅ Optimization and background full-file analysis completed successfully!")
+            st.session_state['optimization_results'] = results
+            st.session_state['metrics_df'] = pd.DataFrame(metrics_list)
+            st.session_state['t_exp'] = t_exp
+            st.session_state['s_exp'] = s_exp
+            st.session_state['xrd_cec_swell'] = estimated_max_swell
+            
+            st.success("✅ Optimization and background full-file analysis completed successfully!")
 
 # --- DISPLAY RESULTS, CHARTS & METRICS ---
 if 'optimization_results' in st.session_state:
     
-    # Display XRD / CEC Correlation Summary Card
     st.info(f"🔬 **Mineralogical Swelling Potential (XRD & CEC Correlation):** Estimated Max Swelling = **{st.session_state['xrd_cec_swell']:.2f}%** (Based on {smectite_pct}% Smectite and CEC of {cec_val} meq/100g)")
 
     st.markdown("#### 📈 Swelling vs. Time Model Comparison")
