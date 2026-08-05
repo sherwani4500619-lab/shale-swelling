@@ -122,16 +122,20 @@ if equation_choice == "Empirical CEC Model (Theoretical)":
 # AUTO-FIT MODELS (DATA UPLOAD REQUIRED)
 # ==========================================
 else:
-    st.sidebar.markdown("### 2. Upload Lab Data")
-    st.sidebar.caption("Upload a CSV file. Column 1 must be Time (seconds), Column 2 must be Swelling (%).")
-    uploaded_file = st.sidebar.file_uploader("Upload Experimental Data (CSV)", type=["csv"])
+   st.sidebar.markdown("### 2. Upload Lab Data")
+    st.sidebar.caption("Upload a CSV or Excel file. Column 1 must be Time (seconds), Column 2 must be Swelling (%).")
+    uploaded_file = st.sidebar.file_uploader("Upload Experimental Data", type=["csv", "xlsx"])
 
     if uploaded_file is None:
-        st.info("👋 Please upload your experimental CSV data in the sidebar to run the auto-solver.")
+        st.info("👋 Please upload your experimental data (CSV or Excel) in the sidebar to run the auto-solver.")
         st.stop()
 
     try:
-        lab_data = pd.read_csv(uploaded_file)
+        # Check the file extension and use the correct reader
+        if uploaded_file.name.endswith('.csv'):
+            lab_data = pd.read_csv(uploaded_file)
+        else:
+            lab_data = pd.read_excel(uploaded_file, engine='openpyxl')
         t_exp = lab_data.iloc[:, 0].values
         s_exp = lab_data.iloc[:, 1].values
 
