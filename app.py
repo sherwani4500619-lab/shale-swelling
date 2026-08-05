@@ -79,14 +79,20 @@ else:
 
     st.divider()
 
-    # --- Prepare Data Frame (Strictly limited to Time in Seconds and Swelling) ---
+    # --- Prepare Data Frames ---
+    
+    # 1. Dataframe specifically for the Chart (Time in Hours)
+    t_hours = t_sec / 3600.0
+    chart_data = pd.DataFrame({
+        "Time (in hrs)": t_hours,
+        "Predicted Swelling": swelling
+    }).set_index("Time (in hrs)")
+
+    # 2. Dataframe specifically for CSV Export (Time in Seconds)
     results_df = pd.DataFrame({
         "Time (in sec)": t_sec,
         "Predicted Swelling": swelling
     })
-
-    # Set index for charting purposes so the x-axis reads correctly
-    chart_data = results_df.set_index("Time (in sec)")
 
     # --- Organize Outputs into Tabs ---
     tab1, tab2 = st.tabs(["📈 Interactive Swelling Chart", "💾 Export Data"])
@@ -98,7 +104,7 @@ else:
         st.markdown("#### Download Results")
         st.write("Click the button below to download the full time-series data (Time in seconds vs. Predicted Swelling).")
         
-        # Convert the restricted dataframe to CSV
+        # Convert the export dataframe to CSV
         csv_data = results_df.to_csv(index=False).encode('utf-8')
         
         st.download_button(
