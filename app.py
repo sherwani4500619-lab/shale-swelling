@@ -66,38 +66,37 @@ else:
     ratio_exp = exp_num / exp_denom
 
     swelling = A * (np.abs(x) ** exp_num) / ((1 + (np.abs(x) ** exp_denom)) ** ratio_exp)
-
-    # 5. Convert time vector to HOURS strictly for the final output
-    t_hours = t_sec / 3600.0
+    
+    # Final swelling value for the summary display
+    final_swelling = swelling[-1] if len(swelling) > 0 else 0.0
 
     # --- Display Computed Parameters ---
-    st.markdown("### 📊 Model Outputs Summary")
-    with st.info("Calculated constants based on current input parameters:"):
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Mineral Factor (R)", f"{R:.4f}")
-        col2.metric("Max Capacity (A)", f"{A:.4f} %")
-        col3.metric("Characteristic Time (τ)", f"{tau:.2f} s")
+    st.markdown("### 📊 Final Output Summary")
+    with st.info("Simulation Results:"):
+        col1, col2 = st.columns(2)
+        col1.metric("Total Time Taken", f"{max_time_input} {time_unit}")
+        col2.metric("Final Predicted Swelling", f"{final_swelling:.4f} %")
 
     st.divider()
 
-    # --- Prepare Data Frame (Strictly limited to 2 output columns) ---
+    # --- Prepare Data Frame (Strictly limited to Time in Seconds and Swelling) ---
     results_df = pd.DataFrame({
-        "time(in hrs)": t_hours,
-        "Predicted swelling": swelling
+        "Time (in sec)": t_sec,
+        "Predicted Swelling": swelling
     })
 
     # Set index for charting purposes so the x-axis reads correctly
-    chart_data = results_df.set_index("time(in hrs)")
+    chart_data = results_df.set_index("Time (in sec)")
 
     # --- Organize Outputs into Tabs ---
-    tab1, tab2 = st.tabs(["📈 Interactive Swelling Chart", "💾 Raw Data & Export"])
+    tab1, tab2 = st.tabs(["📈 Interactive Swelling Chart", "💾 Export Data"])
 
     with tab1:
         st.line_chart(chart_data)
 
     with tab2:
-        st.markdown("#### Final Output Data")
-        st.dataframe(results_df, use_container_width=True)
+        st.markdown("#### Download Results")
+        st.write("Click the button below to download the full time-series data (Time in seconds vs. Predicted Swelling).")
         
         # Convert the restricted dataframe to CSV
         csv_data = results_df.to_csv(index=False).encode('utf-8')
