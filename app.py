@@ -54,31 +54,23 @@ st.set_page_config(
  
 # --- Header Section ---
 st.title("🪨 Advanced Shale Swelling Prediction & Multi-Model Comparison Dashboard")
-st.markdown("Compare experimental lab data against your Custom Asymptotic Model and all standard kinetic models with robust curve fitting, statistical evaluation, and dark experimental data contrast.")
+st.markdown("Compare experimental lab data against custom and standard kinetic models with selective multi-model evaluation, statistical metrics, and dark experimental data contrast.")
 st.divider()
  
-# --- Sidebar: Equation Selection ---
+# --- Sidebar: Mode Selection ---
 st.sidebar.title("⚙️ Model Parameters")
-equation_choice = st.sidebar.selectbox(
+evaluation_mode = st.sidebar.radio(
     "1. Select Evaluation Mode", 
     [
         "Empirical CEC Model (Theoretical)", 
-        "Custom Equation (Auto-Fit)",
-        "Single Exponential (First-order)",
-        "Double Exponential",
-        "Weibull Model",
-        "Logistic Model",
-        "Gompertz Model",
-        "Power Law",
-        "Peleg Model",
-        "Compare All Auto-Fit Models"
+        "Experimental Data Fitting & Comparison"
     ]
 )
  
 # ==========================================
 # EQUATION 1: EMPIRICAL CEC MODEL (NO DATA UPLOAD REQUIRED)
 # ==========================================
-if equation_choice == "Empirical CEC Model (Theoretical)":
+if evaluation_mode == "Empirical CEC Model (Theoretical)":
     with st.sidebar.expander("2. Rock Properties", expanded=True):
         cec = st.number_input("CEC (meq/100 g)", value=25.0, step=0.5)
         sm = st.number_input("Smectite (Sm)", value=20.0, step=0.5)
@@ -109,7 +101,7 @@ if equation_choice == "Empirical CEC Model (Theoretical)":
         swelling = A * (np.abs(x) ** exp_num) / ((1 + (np.abs(x) ** exp_denom)) ** (exp_num / exp_denom))
  
         st.markdown("### 📊 Final Output Summary")
-        with st.info(f"Using {equation_choice}:"):
+        with st.info(f"Using Empirical CEC Model (Theoretical):"):
             col1, col2, col3 = st.columns(3)
             col1.metric("Mineral Factor (R)", f"{R:.4f}")
             col2.metric("Max Capacity (A)", f"{A:.4f} %")
@@ -138,7 +130,7 @@ if equation_choice == "Empirical CEC Model (Theoretical)":
             )
  
 # ==========================================
-# AUTO-FIT MODELS (DATA UPLOAD REQUIRED)
+# EXPERIMENTAL DATA FITTING & MULTI-MODEL SELECTION
 # ==========================================
 else:
     st.sidebar.markdown("### 2. Upload Lab Data")
@@ -148,6 +140,24 @@ else:
     if uploaded_file is None:
         st.info("👋 Please upload your experimental data (CSV or Excel) in the sidebar to run the auto-solver.")
         st.stop()
+        
+    # Sidebar Model Multiselect Checklist
+    st.sidebar.markdown("### 3. Select Models to Compare")
+    available_models = [
+        "Custom Asymptotic Model",
+        "Single Exponential (First-order)",
+        "Double Exponential",
+        "Weibull Model",
+        "Logistic Model",
+        "Gompertz Model",
+        "Power Law",
+        "Peleg Model"
+    ]
+    selected_models = st.sidebar.multiselect(
+        "Choose models for evaluation:",
+        options=available_models,
+        default=["Custom Asymptotic Model", "Weibull Model"]
+    )
  
     try:
         excel_file = pd.ExcelFile(uploaded_file)
@@ -178,8 +188,12 @@ else:
         t_exp = t_sec[valid_idx]
         s_exp = s_exp[valid_idx]
  
-        st.markdown(f"### 📊 Auto-Solver & Comparison Results (Sheet: {sheet_name})")
+        st.markdown(f"### 📊 Auto-Solver & Multi-Model Comparison (Sheet: {sheet_name})")
         
+        if not selected_models:
+            st.warning("⚠️ Please select at least one model from the sidebar multiselect box.")
+            st.stop()
+            
         # Performance downsampling for swift curve fitting
         step = max(1, len(t_exp) // 300)
         t_fit_x = t_exp[::step]
@@ -189,7 +203,7 @@ else:
         metrics_list = []
         
         # 1. Custom Asymptotic Model
-        if equation_choice in ["Custom Equation (Auto-Fit)", "Compare All Auto-Fit Models"]:
+        if "Custom Asymptotic Model" in selected_models:
             try:
                 p0_custom = [max(s_fit_y), np.median(t_fit_x)] 
                 popt, _ = curve_fit(custom_model, t_fit_x, s_fit_y, p0=p0_custom, bounds=(0, np.inf), maxfev=5000)
@@ -202,7 +216,7 @@ else:
                 st.warning(f"Custom Model fit skipped: {e}")
 
         # 2. Single Exponential
-        if equation_choice in ["Single Exponential (First-order)", "Compare All Auto-Fit Models"]:
+        if "Single Exponential (First-order)" in selected_models:
             try:
                 popt, _ = curve_fit(single_exponential, t_fit_x, s_fit_y, p0=[max(s_fit_y), 1e-4], bounds=(0, np.inf), maxfev=5000)
                 y_pred_full = single_exponential(t_exp, *popt)
@@ -214,7 +228,7 @@ else:
                 st.warning(f"Single Exponential fit skipped: {e}")
 
         # 3. Double Exponential
-        if equation_choice in ["Double Exponential", "Compare All Auto-Fit Models"]:
+        if "Double Exponential" in selected_models:
             try:
                 p0_double = [max(s_fit_y)*0.6, 1e-3, max(s_fit_y)*0.4, 1e-5]
                 popt, _ = curve_fit(double_exponential, t_fit_x, s_fit_y, p0=p0_double, bounds=(0, np.inf), maxfev=10000)
@@ -227,7 +241,7 @@ else:
                 st.warning(f"Double Exponential fit skipped: {e}")
 
         # 4. Weibull Model
-        if equation_choice in ["Weibull Model", "Compare All Auto-Fit Models"]:
+        if "Weibull Model" in selected_models:
             try:
                 p0_weibull = [max(s_fit_y), np.median(t_fit_x), 1.0]
                 popt, _ = curve_fit(weibull_model, t_fit_x, s_fit_y, p0=p0_weibull, bounds=([0, 0, 0], [np.inf, np.inf, 5]), maxfev=8000)
@@ -240,7 +254,7 @@ else:
                 st.warning(f"Weibull Model fit skipped: {e}")
 
         # 5. Logistic Model
-        if equation_choice in ["Logistic Model", "Compare All Auto-Fit Models"]:
+        if "Logistic Model" in selected_models:
             try:
                 p0_logistic = [max(s_fit_y), 1e-4, np.median(t_fit_x)]
                 popt, _ = curve_fit(logistic_model, t_fit_x, s_fit_y, p0=p0_logistic, bounds=([0, 0, -np.inf], [np.inf, np.inf, np.inf]), maxfev=8000)
@@ -253,7 +267,7 @@ else:
                 st.warning(f"Logistic Model fit skipped: {e}")
 
         # 6. Gompertz Model
-        if equation_choice in ["Gompertz Model", "Compare All Auto-Fit Models"]:
+        if "Gompertz Model" in selected_models:
             try:
                 p0_gomp = [max(s_fit_y), 1e-4, np.median(t_fit_x)]
                 popt, _ = curve_fit(gompertz_model, t_fit_x, s_fit_y, p0=p0_gomp, bounds=([0, 0, -np.inf], [np.inf, np.inf, np.inf]), maxfev=8000)
@@ -266,7 +280,7 @@ else:
                 st.warning(f"Gompertz Model fit skipped: {e}")
 
         # 7. Power Law
-        if equation_choice in ["Power Law", "Compare All Auto-Fit Models"]:
+        if "Power Law" in selected_models:
             try:
                 p0_power = [0.1, 0.5]
                 popt, _ = curve_fit(power_law, t_fit_x, s_fit_y, p0=p0_power, bounds=(0, [np.inf, 2.0]), maxfev=5000)
@@ -279,7 +293,7 @@ else:
                 st.warning(f"Power Law fit skipped: {e}")
 
         # 8. Peleg Model
-        if equation_choice in ["Peleg Model", "Compare All Auto-Fit Models"]:
+        if "Peleg Model" in selected_models:
             try:
                 p0_peleg = [10.0, 0.1]
                 popt, _ = curve_fit(peleg_model, t_fit_x, s_fit_y, p0=p0_peleg, bounds=(0, np.inf), maxfev=5000)
@@ -297,7 +311,7 @@ else:
         tab1, tab2, tab3 = st.tabs(["📈 Data vs. Model Comparison", "📊 Statistical Performance", "💾 Export Data"])
         
         with tab1:
-            st.markdown("*(Actual experimental swelling is highlighted with a bold dark line/marker for clear comparison against fitted models)*")
+            st.markdown("*(Actual experimental swelling is highlighted with a bold dark line/marker for clear comparison against your selected models)*")
             
             melted_df = df_chart.melt(
                 id_vars=["Time (seconds)"], 
@@ -349,7 +363,7 @@ else:
             st.download_button(
                 label="📥 Download Complete Results as Excel (.xlsx)",
                 data=excel_data,
-                file_name="shale_swelling_all_models_results.xlsx",
+                file_name="shale_swelling_selected_models_results.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
  
