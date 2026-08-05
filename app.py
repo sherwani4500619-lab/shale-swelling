@@ -10,7 +10,7 @@ import io
 def custom_model(t, A, tau):
     """Equation 2: Custom Asymptotic Swelling Model"""
     x = t / np.maximum(tau, 1e-6)
-    exp_val = 0.671205
+    exp_val = 0.8
     return A * (np.abs(x)**exp_val) / (1.0 + (np.abs(x)**exp_val))
 
 def single_exponential(t, A, k):
