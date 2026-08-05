@@ -81,7 +81,7 @@ if evaluation_mode == "Empirical CEC Model (Theoretical)":
         cal = st.number_input("Calcite (Cal)", value=15.0, step=0.5)
         hal = st.number_input("Halite (Hal)", value=5.0, step=0.5)
  
-    with st.sidebar.expander("3. Time Settings", expanded=True):
+    with st.sidebar.expander("3. TimeSettings", expanded=True):
         time_unit = st.selectbox("Input Time Unit", ["Hours", "Minutes", "Seconds", "Days"], index=0)
         max_time_input = st.number_input(f"Simulation Duration ({time_unit})", min_value=0.1, value=24.0, step=1.0)
  
@@ -136,11 +136,11 @@ if evaluation_mode == "Empirical CEC Model (Theoretical)":
 # ==========================================
 else:
     st.sidebar.markdown("### 2. Upload Lab Data")
-    st.sidebar.caption("Upload a CSV or Excel file. Column 1 must be Time (seconds), Column 2 must be Swelling (%).")
+    st.sidebar.caption("Upload your Excel or CSV file. The app will automatically scan and identify time and swelling columns.")
     uploaded_file = st.sidebar.file_uploader("Upload Experimental Data", type=["csv", "xlsx"])
  
     if uploaded_file is None:
-        st.info("👋 Please upload your experimental data (CSV or Excel) in the sidebar to run the auto-solver.")
+        st.info("👋 Please upload your experimental data workbook in the sidebar to run the auto-solver.")
         st.stop()
         
     # Sidebar Model Multiselect Checklist
@@ -163,13 +163,45 @@ else:
  
     try:
         excel_file = pd.ExcelFile(uploaded_file)
-        sheet_name = st.sidebar.selectbox("Select Cell Sheet", excel_file.sheet_names)
+        sheet_name = st.sidebar.selectbox("Select Sheet", excel_file.sheet_names)
         
-        lab_data = pd.read_excel(uploaded_file, sheet_name=sheet_name, skiprows=14)
-        lab_data.columns = lab_data.columns.astype(str).str.strip()
+        # --- UNIVERSAL AUTO-SCANNING PARSER ---
+        lab_data = None
+        raw_time = None
+        s_exp = None
         
-        raw_time = lab_data.iloc[:, 1]  # Elapsed Time column
-        s_exp = pd.to_numeric(lab_data.iloc[:, 2], errors='coerce').values  # Swelling (%) column
+        # Scan header offsets from 0 to 20 to locate time & swelling columns automatically
+        for skip_row in range(20):
+            try:
+                temp_df = pd.read_excel(uploaded_file, sheet_name=sheet_name, skiprows=skip_row)
+                temp_df.columns = temp_df.columns.astype(str).str.strip().str.lower()
+                
+                t_col, s_col = None, None
+                for col in temp_df.columns:
+                    if any(kw in col for kw in ['time', 'elapsed', 'sec', 'min', 'hr']):
+                        if t_col is None:
+                            t_col = col
+                    if any(kw in col for kw in ['s(t)', 'swelling', 'swell', 'pct', '%', 'actual']):
+                        if s_col is None:
+                            s_col = col
+                            
+                if t_col and s_col:
+                    lab_data = temp_df
+                    raw_time = lab_data[t_col]
+                    s_exp = pd.to_numeric(lab_data[s_col], errors='coerce').values
+                    break
+            except:
+                continue
+                
+        # Fallback if header scanning didn't match: use default positional columns
+        if raw_time is None or s_exp is None or len(np.isnan(s_exp)) == len(s_exp) or np.all(np.isnan(s_exp)):
+            lab_data = pd.read_excel(uploaded_file, sheet_name=sheet_name)
+            if lab_data.shape[1] >= 2:
+                raw_time = lab_data.iloc[:, 0]
+                s_exp = pd.to_numeric(lab_data.iloc[:, 1], errors='coerce').values
+            else:
+                st.error("⚠️ Could not automatically detect time and swelling columns in this sheet.")
+                st.stop()
         
         def time_to_sec(t_str):
             try:
@@ -354,21 +386,18 @@ else:
                 
                 with col_m1:
                     fig, ax = plt.subplots(figsize=(6, 4.5))
-                    sorted_rmse = metrics_df.sort_values(by="RMSE (%)", ascending=True) # Lowest RMSE is best, but let's sort descending or ascending as requested
-                    # User requested: "arrange automatically from highest to lowest"
                     sorted_rmse_desc = metrics_df.sort_values(by="RMSE (%)", ascending=False)
                     
                     bars = ax.bar(sorted_rmse_desc["Model"], sorted_rmse_desc["RMSE (%)"], color='#d62728', alpha=0.65, edgecolor='black', linewidth=0.8)
-                    ax.set_title("Root Mean Squared Error (RMSE % - Lower is Better)", fontsize=11, fontweight='bold', pad=10)
+                    ax.set_title("Root Mean Squared Error (RMSE %)", fontsize=11, fontweight='bold', pad=10)
                     ax.set_ylabel("RMSE (%)", fontsize=10)
                     plt.xticks(rotation=30, ha='right', fontsize=9)
                     
-                    # Add value labels on top of bars
                     for bar in bars:
                         height = bar.get_height()
                         ax.annotate(f'{height:.4f}',
                                     xy=(bar.get_x() + bar.get_width() / 2, height),
-                                    xytext=(0, 4),  # 4 points vertical offset
+                                    xytext=(0, 4),
                                     textcoords="offset points",
                                     ha='center', va='bottom', fontsize=9, fontweight='bold')
                     
@@ -379,14 +408,13 @@ else:
                 
                 with col_m2:
                     fig, ax = plt.subplots(figsize=(6, 4.5))
-                    sorted_r2_desc = metrics_df.sort_values(by="R² Score", ascending=False) # Highest R2 first
+                    sorted_r2_desc = metrics_df.sort_values(by="R² Score", ascending=False)
                     
                     bars = ax.bar(sorted_r2_desc["Model"], sorted_r2_desc["R² Score"], color='#2ca02c', alpha=0.65, edgecolor='black', linewidth=0.8)
-                    ax.set_title("Coefficient of Determination (R² Score - Higher is Better)", fontsize=11, fontweight='bold', pad=10)
+                    ax.set_title("Coefficient of Determination (R² Score)", fontsize=11, fontweight='bold', pad=10)
                     ax.set_ylabel("R² Score", fontsize=10)
                     plt.xticks(rotation=30, ha='right', fontsize=9)
                     
-                    # Add value labels on top of bars
                     for bar in bars:
                         height = bar.get_height()
                         ax.annotate(f'{height:.4f}',
