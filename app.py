@@ -131,16 +131,36 @@ else:
         st.stop()
 
     try:
-        # Check the file extension and use the correct reader
-        if uploaded_file.name.endswith('.csv'):
-            lab_data = pd.read_csv(uploaded_file)
-        else:
-            lab_data = pd.read_excel(uploaded_file, engine='openpyxl')
-        t_exp = lab_data.iloc[:, 0].values
-        s_exp = lab_data.iloc[:, 1].values
-
-        st.markdown("### 📊 Auto-Solver Results")
+        # 1. Let user pick which sheet (cell test) to load
+        excel_file = pd.ExcelFile(uploaded_file)
+        sheet_name = st.sidebar.selectbox("Select Cell Sheet", excel_file.sheet_names)
         
+        # 2. Skip metadata rows and read starting from header at row 14
+        lab_data = pd.read_excel(uploaded_file, sheet_name=sheet_name, skiprows=14)
+        
+        # Clean column names (strip whitespace)
+        lab_data.columns = lab_data.columns.astype(str).str.strip()
+        
+        # Extract Elapsed Time and Swelling columns
+        raw_time = lab_data.iloc[:, 1]  # Elap Time column
+        s_exp = pd.to_numeric(lab_data.iloc[:, 2], errors='coerce').values  # Swell (%)
+        
+        # 3. Convert hh:mm:ss text format to total seconds
+        def time_to_sec(t_str):
+            try:
+                parts = str(t_str).split(':')
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+            except:
+                return np.nan
+                
+        t_sec = np.array([time_to_sec(t) for t in raw_time])
+        
+        # Clean out any missing or NaN rows
+        valid_idx = ~np.isnan(t_sec) & ~np.isnan(s_exp)
+        t_exp = t_sec[valid_idx]
+        s_exp = s_exp[valid_idx]
+
+        st.markdown(f"### 📊 Auto-Solver Results (Sheet: {sheet_name})")
         df_chart = pd.DataFrame({"Time (sec)": t_exp, "Experimental Data": s_exp})
         
         # 1. Custom Model Fit
