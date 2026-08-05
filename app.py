@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from io import BytesIO
 
 # --- Page Configuration ---
@@ -70,20 +69,17 @@ else:
 
     st.markdown("---")
 
-    # --- Plotting ---
+    # --- Plotting (Using Streamlit Native Charts instead of Matplotlib) ---
     st.subheader("Swelling vs. Time Curve")
     
-    fig, ax = plt.subplots(figsize=(10, 4.5))
-    ax.plot(t_display, swelling, color="#005b96", linewidth=2.5, label="Predicted Swelling S(t)")
-    ax.axhline(A, color="#d9534f", linestyle="--", alpha=0.8, label=f"Asymptotic Capacity A ({A:.2f}%)")
+    # Create a simple dataframe for the chart
+    chart_data = pd.DataFrame({
+        f"Time ({time_unit})": t_display,
+        "Predicted Swelling S(t) (%)": swelling
+    }).set_index(f"Time ({time_unit})")
     
-    ax.set_xlabel(f"Time ({time_unit})")
-    ax.set_ylabel("Linear Swelling S(t) (%)")
-    ax.set_title("Predicted Shale Linear Swelling Profile")
-    ax.grid(True, linestyle=":", alpha=0.7)
-    ax.legend(loc="lower right")
-    
-    st.pyplot(fig)
+    # Display the interactive line chart
+    st.line_chart(chart_data)
 
     # --- Prepare Data Frame for Export ---
     results_df = pd.DataFrame({
