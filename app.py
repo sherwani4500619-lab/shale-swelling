@@ -8,10 +8,10 @@ import io
 
 # --- Mathematical Model Functions for the Solver ---
 def custom_model(t, A, tau):
-    """Custom Asymptotic Swelling Model with fixed exponent 0.671205"""
-    x = t / tau
+    """Equation 2: Custom Asymptotic Swelling Model"""
+    x = t / np.maximum(tau, 1e-6)
     exp_val = 0.671205
-    return A * (np.abs(x)**exp_val) / (1 + (np.abs(x)**exp_val))
+    return A * (np.abs(x)**exp_val) / (1.0 + (np.abs(x)**exp_val))
 
 def single_exponential(t, A, k):
     """Single Exponential (First-order kinetic): S(t) = A * (1 - exp(-k * t))"""
@@ -54,7 +54,7 @@ st.set_page_config(
  
 # --- Header Section ---
 st.title("🪨 Advanced Shale Swelling Prediction & Multi-Model Comparison Dashboard")
-st.markdown("Compare experimental lab data against custom and standard kinetic models with selective multi-model evaluation, statistical metrics, and dark experimental data contrast.")
+st.markdown("Compare experimental lab data against your Custom Asymptotic Model and other kinetic models with multi-select comparison, statistical performance charts, and Excel export.")
 st.divider()
  
 # --- Sidebar: Mode Selection ---
@@ -156,7 +156,7 @@ else:
     selected_models = st.sidebar.multiselect(
         "Choose models for evaluation:",
         options=available_models,
-        default=["Custom Asymptotic Model", "Weibull Model"]
+        default=["Custom Asymptotic Model", "Single Exponential (First-order)"]
     )
  
     try:
@@ -213,7 +213,7 @@ else:
                 r2 = r2_score(s_exp, y_pred_full)
                 metrics_list.append({"Model": "Custom Asymptotic Model", "RMSE (%)": round(rmse, 4), "R² Score": round(r2, 4)})
             except Exception as e:
-                st.warning(f"Custom Model fit skipped: {e}")
+                st.warning(f"Custom Asymptotic Model fit skipped: {e}")
 
         # 2. Single Exponential
         if "Single Exponential (First-order)" in selected_models:
@@ -311,7 +311,8 @@ else:
         tab1, tab2, tab3 = st.tabs(["📈 Data vs. Model Comparison", "📊 Statistical Performance", "💾 Export Data"])
         
         with tab1:
-            st.markdown("*(Actual experimental swelling is highlighted with a bold dark line/marker for clear comparison against your selected models)*")
+            st.markdown("### 📈 Swelling vs. Time Model Comparison")
+            st.markdown("*(Actual experimental swelling is highlighted with a bold dark line/marker)*")
             
             melted_df = df_chart.melt(
                 id_vars=["Time (seconds)"], 
@@ -339,12 +340,36 @@ else:
                 y=alt.Y('Swelling (%):Q', title='Swelling (%)'),
                 color=alt.Color('Legend / Model:N', scale=alt.Scale(domain=domain_list, range=range_list), title='Models & Data'),
                 tooltip=['Time (seconds):Q', 'Swelling (%):Q', 'Legend / Model:N']
-            ).properties(width=700, height=480).interactive()
+            ).properties(width=700, height=450).interactive()
             
             st.altair_chart(base_chart, use_container_width=True)
             
+            # --- R² AND RMSE BAR PLOTS BENEATH THE GRAPH ---
+            if not metrics_df.empty:
+                st.markdown("### 📊 Model Performance Comparison Bar Charts")
+                
+                col_bar1, col_bar2 = st.columns(2)
+                
+                with col_bar1:
+                    st.markdown("#### Root Mean Squared Error (RMSE % - Lower is Better)")
+                    rmse_chart = alt.Chart(metrics_df).mark_bar(color='#d62728').encode(
+                        x=alt.X('Model:N', sort='-y', title='Model'),
+                        y=alt.Y('RMSE (%):Q', title='RMSE (%)'),
+                        tooltip=['Model:N', 'RMSE (%):Q']
+                    ).properties(width=320, height=300).interactive()
+                    st.altair_chart(rmse_chart, use_container_width=True)
+                
+                with col_bar2:
+                    st.markdown("#### Coefficient of Determination (R² Score - Higher is Better)")
+                    r2_chart = alt.Chart(metrics_df).mark_bar(color='#2ca02c').encode(
+                        x=alt.X('Model:N', sort='-y', title='Model'),
+                        y=alt.Y('R² Score:Q', title='R² Score'),
+                        tooltip=['Model:N', 'R² Score:Q']
+                    ).properties(width=320, height=300).interactive()
+                    st.altair_chart(r2_chart, use_container_width=True)
+            
         with tab2:
-            st.markdown("#### Model Accuracy Metrics Comparison")
+            st.markdown("#### Model Accuracy Metrics Comparison Table")
             if not metrics_df.empty:
                 st.dataframe(metrics_df, use_container_width=True)
             else:
